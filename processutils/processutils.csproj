@@ -1,0 +1,55 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    
+    <!-- NuGet Package Properties -->
+    <PackageId>ProcessUtils</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Terje Sandstrom</Authors>
+    <Company>Hermit AS</Company>
+    <Copyright>Copyright © $(Authors) $([System.DateTime]::Now.Year)</Copyright>
+    <Description>A utility library for running external processes with proper argument escaping and output capture. Originally derived from the NUnit3TestAdapter project.</Description>
+    <Copyright>Copyright © $(Authors) $([System.DateTime]::Now.Year)</Copyright>
+    <PackageTags>process;runner;utilities;command;execution;shell</PackageTags>
+    <PackageProjectUrl>https://github.com/hermitos/processutils</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/hermitos/processutils</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial release of ProcessUtils library.</PackageReleaseNotes>
+    
+    <!-- Package Output Settings -->
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedAllSources>true</EmbedAllSources>
+    
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    
+    <!-- Deterministic Build -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    
+    <!-- Strong Naming (optional, uncomment if needed) -->
+    <!-- <SignAssembly>true</SignAssembly> -->
+    <!-- <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include README in package -->
+    <None Include="..\README.md" Pack="true" PackagePath="\" Condition="Exists('..\README.md')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Source Link for debugging -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>

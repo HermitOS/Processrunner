@@ -13,6 +13,46 @@ public static class ProcessUtilsTests
     }
 
     [Test]
+    public static void Run_Cancelled_ThrowsOperationCanceled()
+    {
+        // Arrange
+        var testDirectory = Path.GetDirectoryName(typeof(ProcessUtilsTests).Assembly.Location);
+        var pythonScript = Path.Combine(testDirectory!, "test_sleep.py");
+        var pythonCommand = OperatingSystem.IsWindows() ? "python" : "python3";
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        // Act + Assert
+    Assert.That(async () => await ProcessRunner.Run(
+                workingDirectory: testDirectory!,
+                scriptPath: pythonCommand,
+                arguments: new[] { pythonScript, "5" },
+        cancellationToken: cts.Token),
+        Throws.InstanceOf<OperationCanceledException>());
+    }
+
+    [Test]
+    public static async Task RunAsync_PythonScript_ReturnsCorrectOutput()
+    {
+        // Arrange
+        var testDirectory = Path.GetDirectoryName(typeof(ProcessUtilsTests).Assembly.Location);
+        var pythonScript = Path.Combine(testDirectory!, "test_add.py");
+
+        var pythonCommand = OperatingSystem.IsWindows() ? "python" : "python3";
+
+        // Act
+        var result = await ProcessRunner.RunAsync(
+            workingDirectory: testDirectory!,
+            scriptPath: pythonCommand,
+            arguments: new[] { pythonScript }
+        );
+
+        // Assert
+        Assert.That(result.ExitCode, Is.EqualTo(0), $"Python script failed with error: {result.StdErr}");
+        Assert.That(result.StdOut.Trim(), Is.EqualTo("42"));
+    }
+
+    [Test]
     public static void EscapeProcessArguments_null_alwaysQuote()
     {
         Assert.That(ProcessRunner.EscapeProcessArguments([null], true), Is.EqualTo("\"\""));
@@ -91,7 +131,7 @@ public static class ProcessUtilsTests
     }
 
     [Test]
-    public static void Run_PythonScript_ReturnsCorrectOutput()
+    public static async Task Run_PythonScript_ReturnsCorrectOutput()
     {
         // Arrange
         var testDirectory = Path.GetDirectoryName(typeof(ProcessUtilsTests).Assembly.Location);
@@ -101,7 +141,7 @@ public static class ProcessUtilsTests
         var pythonCommand = OperatingSystem.IsWindows() ? "python" : "python3";
         
         // Act
-        var result = ProcessRunner.Run(
+        var result = await ProcessRunner.Run(
             workingDirectory: testDirectory!,
             scriptPath: pythonCommand,
             arguments: new[] { pythonScript }
@@ -113,7 +153,7 @@ public static class ProcessUtilsTests
     }
 
     [Test]
-    public static void Run_PythonScript_WithEmptyWorkingDirectory_UsesScriptDirectory()
+    public static async Task Run_PythonScript_WithEmptyWorkingDirectory_UsesScriptDirectory()
     {
         // Arrange
         // This simulates an Azure environment where we don't know the working directory
@@ -126,19 +166,20 @@ public static class ProcessUtilsTests
         
         // Act
         // Using empty string for workingDirectory - it will use the script's directory
-        var result = ProcessRunner.Run(
+        var result = await ProcessRunner.Run(
             workingDirectory: string.Empty,
             scriptPath: pythonCommand,
             arguments: new[] { pythonScript }
         );
-        
-        // Assert
-        Assert.That(result.ExitCode, Is.EqualTo(0), $"Python script failed with error: {result.StdErr}");
-        Assert.That(result.StdOut.Trim(), Is.EqualTo("42"), "Expected output to be 42 (21 + 21)");
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.ExitCode, Is.Zero, $"Python script failed with error: {result.StdErr}");
+            Assert.That(result.StdOut.Trim(), Is.EqualTo("42"), "Expected output to be 42 (21 + 21)");
+        }
     }
 
     [Test]
-    public static void Run_PythonScript_WithRelativePath_FromCurrentDirectory()
+    public static async Task Run_PythonScript_WithRelativePath_FromCurrentDirectory()
     {
         // Arrange
         // This simulates running from the bin directory in Azure
@@ -158,15 +199,16 @@ public static class ProcessUtilsTests
             var pythonCommand = OperatingSystem.IsWindows() ? "python" : "python3";
             
             // Act
-            var result = ProcessRunner.Run(
+            var result = await ProcessRunner.Run(
                 workingDirectory: string.Empty,
                 scriptPath: pythonCommand,
                 arguments: new[] { relativePythonScript }
             );
-            
-            // Assert
-            Assert.That(result.ExitCode, Is.EqualTo(0), $"Python script failed with error: {result.StdErr}");
-            Assert.That(result.StdOut.Trim(), Is.EqualTo("42"), "Expected output to be 42 (21 + 21)");
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(result.ExitCode, Is.Zero, $"Python script failed with error: {result.StdErr}");
+                Assert.That(result.StdOut.Trim(), Is.EqualTo("42"), "Expected output to be 42 (21 + 21)");
+            }
         }
         finally
         {

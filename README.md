@@ -22,6 +22,30 @@ Install via NuGet:
 dotnet add package ProcessUtils
 ```
 
+### Cancellation and timeouts
+
+You can cancel a running process using a `CancellationToken`, for example to enforce a timeout. When cancelled, the process is terminated and the task will be cancelled (you may observe `TaskCanceledException`, which derives from `OperationCanceledException`).
+
+```csharp
+using ProcessUtils;
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+try
+{
+    var result = await ProcessRunner.Run(
+        workingDirectory: string.Empty,
+        scriptPath: OperatingSystem.IsWindows() ? "python" : "python3",
+        arguments: new[] { "./long_running_script.py" },
+        cancellationToken: cts.Token
+    );
+    Console.WriteLine($"Output: {result.StdOut}");
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Process timed out and was cancelled.");
+}
+```
+
 Or via Package Manager Console:
 
 ```powershell
@@ -34,7 +58,7 @@ Install-Package ProcessUtils
 using ProcessUtils;
 
 // Run a process and capture output
-var result = ProcessRunner.Run(
+var result = await ProcessRunner.Run(
     workingDirectory: @"C:\MyApp",
     scriptPath: "myapp.exe",
     arguments: new[] { "--option", "value with spaces" }
@@ -61,7 +85,7 @@ using ProcessUtils;
 
 // Assume pythonscript.py is deployed next to your binaries (bin folder)
 // We'll call Python and pass a relative path to the script
-var result = ProcessRunner.Run(
+var result = await ProcessRunner.Run(
     workingDirectory: string.Empty,     // Use current directory automatically
     scriptPath: OperatingSystem.IsWindows() ? "python" : "python3",
     arguments: new[] { "./pythonscript.py" }

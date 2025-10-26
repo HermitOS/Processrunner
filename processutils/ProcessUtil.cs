@@ -4,29 +4,40 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ProcessUtils;
 
 public static class ProcessRunner
 {
-    public static ProcessRunResult Run(string workingDirectory, string scriptPath, IEnumerable<string> arguments = null)
+    public static Task<ProcessRunResult> Run(
+        string workingDirectory,
+        string scriptPath,
+        IEnumerable<string>? arguments = null,
+        CancellationToken cancellationToken = default)
+        => RunAsync(workingDirectory, scriptPath, arguments, cancellationToken);
+
+    public static async Task<ProcessRunResult> RunAsync(
+        string workingDirectory,
+        string scriptPath,
+        IEnumerable<string>? arguments = null,
+        CancellationToken cancellationToken = default)
     {
         if (workingDirectory == string.Empty)
         {
-            // If working directory is empty, try to use the script's directory
-            // If that's also empty/null (e.g., scriptPath is just a command name like "python"),
-            // fall back to the current directory
-            workingDirectory = Path.GetDirectoryName(scriptPath);
-            if (string.IsNullOrEmpty(workingDirectory))
-                workingDirectory = Directory.GetCurrentDirectory();
+            var derived = Path.GetDirectoryName(scriptPath);
+            workingDirectory = string.IsNullOrEmpty(derived)
+                ? Directory.GetCurrentDirectory()
+                : derived;
         }
         if (!Path.IsPathRooted(workingDirectory))
-            throw new ArgumentException( "Working directory must not be relative.", nameof(workingDirectory));
+            throw new ArgumentException("Working directory must not be relative.", nameof(workingDirectory));
 
         if (string.IsNullOrWhiteSpace(scriptPath))
-            throw new ArgumentException( "Script file name must be specified.",nameof(scriptPath));
+            throw new ArgumentException("Script file name must be specified.", nameof(scriptPath));
 
-        var escapedArguments = arguments is null ? null : EscapeProcessArguments(arguments, alwaysQuote: false);
+        var escapedArguments = arguments is null ? string.Empty : EscapeProcessArguments(arguments, alwaysQuote: false);
 
         using var process = new Process
         {
@@ -40,46 +51,54 @@ public static class ProcessRunner
                 RedirectStandardError = true
             }
         };
-        
 
-        var stdout = (StringBuilder)null;
-        var stderr = (StringBuilder)null;
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+
+        var outClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var errClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         process.OutputDataReceived += (sender, e) =>
         {
-            if (e.Data is null) return;
-
-            if (stdout is null)
-                stdout = new StringBuilder();
-            else
-                stdout.AppendLine();
-
+            if (e.Data is null)
+            {
+                outClosed.TrySetResult(true);
+                return;
+            }
+            if (stdout.Length > 0) stdout.AppendLine();
             stdout.Append(e.Data);
         };
 
         process.ErrorDataReceived += (sender, e) =>
         {
-            if (e.Data is null) return;
-
-            if (stderr is null)
-                stderr = new StringBuilder();
-            else
-                stderr.AppendLine();
-
+            if (e.Data is null)
+            {
+                errClosed.TrySetResult(true);
+                return;
+            }
+            if (stderr.Length > 0) stderr.AppendLine();
             stderr.Append(e.Data);
         };
+
+        using var _ = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch { /* ignore */ }
+        });
 
         process.Start();
         process.BeginErrorReadLine();
         process.BeginOutputReadLine();
-        process.WaitForExit();
+
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        await Task.WhenAll(outClosed.Task, errClosed.Task).ConfigureAwait(false);
 
         return new ProcessRunResult(
             scriptPath,
             escapedArguments,
             process.ExitCode,
-            stdout?.ToString(),
-            stderr?.ToString());
+            stdout.ToString(),
+            stderr.ToString());
     }
 
     private static readonly char[] CharsThatRequireQuoting = { ' ', '"' };

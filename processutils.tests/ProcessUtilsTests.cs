@@ -13,6 +13,33 @@ public static class ProcessUtilsTests
     }
 
     [Test]
+    public static async Task Run_PythonScript_Base64Roundtrip_Works()
+    {
+        // Arrange
+        var testDirectory = Path.GetDirectoryName(typeof(ProcessUtilsTests).Assembly.Location)!;
+        var samplePath = Path.Combine(testDirectory, "sample.bin");
+        var encoderScript = Path.Combine(testDirectory, "encode_base64.py");
+
+        // Create a small binary sample payload
+        var original = Enumerable.Range(0, 256).Select(i => (byte)i).ToArray();
+        await File.WriteAllBytesAsync(samplePath, original);
+
+        var pythonCommand = OperatingSystem.IsWindows() ? "python" : "python3";
+
+        // Act
+        var result = await ProcessRunner.Run(
+            workingDirectory: testDirectory,
+            scriptPath: pythonCommand,
+            arguments: new[] { encoderScript, samplePath }
+        );
+
+        // Assert
+        Assert.That(result.ExitCode, Is.EqualTo(0), $"Python encoder failed: {result.StdErr}");
+        var decoded = Convert.FromBase64String(result.StdOut.Trim());
+        Assert.That(decoded.SequenceEqual(original), Is.True, "Decoded bytes did not match original");
+    }
+
+    [Test]
     public static void Run_Cancelled_ThrowsOperationCanceled()
     {
         // Arrange

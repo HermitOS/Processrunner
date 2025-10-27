@@ -101,6 +101,48 @@ else
 }
 ```
 
+### Working with binary data (PDF via Base64)
+
+When a child process needs to return binary data (like a PDF) over stdout, a common pattern is to base64-encode the bytes in the script and decode them in .NET.
+
+Python (pdf_to_base64.py):
+
+```python
+#!/usr/bin/env python3
+import sys, base64
+
+pdf_path = sys.argv[1] if len(sys.argv) > 1 else "./document.pdf"
+with open(pdf_path, "rb") as f:
+    data = f.read()
+
+# Print base64 to stdout (no extra text)
+print(base64.b64encode(data).decode("ascii"))
+```
+
+.NET usage:
+
+```csharp
+// Invoke the Python script to get a base64-encoded PDF on stdout
+var result = await ProcessRunner.Run(
+    workingDirectory: string.Empty,
+    scriptPath: OperatingSystem.IsWindows() ? "python" : "python3",
+    arguments: new[] { "./pdf_to_base64.py", "./document.pdf" }
+);
+
+if (result.ExitCode != 0)
+    throw new InvalidOperationException($"Process failed: {result.StdErr}");
+
+// Convert base64 back to bytes
+// Note: Convert.FromBase64String ignores whitespace (including newlines)
+string base64 = result.StdOut;
+byte[] pdfBytes = Convert.FromBase64String(base64);
+
+// Persist or stream as needed
+await File.WriteAllBytesAsync("./output.pdf", pdfBytes);
+```
+
+
+
 ### API Reference
 
 #### `ProcessRunner.Run()`
@@ -116,8 +158,8 @@ Executes a process and returns the result.
 **Returns:** `ProcessRunResult` containing:
 
 - `ExitCode`: The exit code of the process
-- `StandardOutput`: Captured standard output
-- `StandardError`: Captured standard error
+- `StdOut`: Captured standard output
+- `StdErr`: Captured standard error
 
 #### `ProcessRunner.EscapeProcessArguments()`
 
